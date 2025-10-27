@@ -149,28 +149,44 @@ install_nodejs() {
         log "Assuming Node.js will be available at runtime"
     fi
     
-    # Verify installation
-    if ! command -v node >/dev/null 2>&1; then
-        error_exit "Node.js installation failed - node command not found"
+    # Verify installation (only if we attempted installation)
+    if [ "$EUID" -eq 0 ] && command -v apt-get >/dev/null 2>&1; then
+        # We attempted installation, so verify it worked
+        if ! command -v node >/dev/null 2>&1; then
+            error_exit "Node.js installation failed - node command not found"
+        fi
+    else
+        # CF environment - just check if available, don't fail if missing
+        if command -v node >/dev/null 2>&1; then
+            local node_version=$(node --version 2>&1 | cut -d'v' -f2)
+            log "Node.js found in CF environment: v$node_version"
+        else
+            log "Node.js not available in CF environment - will be handled at runtime"
+        fi
     fi
     
-    local node_version=$(node --version 2>&1 | cut -d'v' -f2)
-    log "Node.js LTS installed successfully: v$node_version"
-    
-    # Verify npm is available
-    if ! command -v npm >/dev/null 2>&1; then
-        log "Warning: npm not found, but Node.js is installed"
+    # Only log version info if Node.js is available
+    if command -v node >/dev/null 2>&1; then
+        local node_version=$(node --version 2>&1 | cut -d'v' -f2)
+        log "Node.js available: v$node_version"
+        
+        # Verify npm is available
+        if ! command -v npm >/dev/null 2>&1; then
+            log "Warning: npm not found, but Node.js is installed"
+        else
+            local npm_version=$(npm --version 2>&1)
+            log "npm available: v$npm_version"
+        fi
+        
+        # Verify LTS version
+        local major_version=$(echo "$node_version" | cut -d'.' -f1)
+        if [ $((major_version % 2)) -eq 0 ]; then
+            log "Confirmed LTS version: v$node_version"
+        else
+            log "Warning: Node.js v$node_version may not be LTS"
+        fi
     else
-        local npm_version=$(npm --version 2>&1)
-        log "npm available: v$npm_version"
-    fi
-    
-    # Verify LTS version
-    local major_version=$(echo "$node_version" | cut -d'.' -f1)
-    if [ $((major_version % 2)) -eq 0 ]; then
-        log "Confirmed LTS version: v$node_version"
-    else
-        log "Warning: Installed Node.js v$node_version may not be LTS"
+        log "Node.js not available - skipping version verification"
     fi
 }
 
