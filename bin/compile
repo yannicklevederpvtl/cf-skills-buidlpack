@@ -76,13 +76,20 @@ install_python() {
         return 0
     fi
     
-    # Update package lists
-    log "Updating package lists..."
-    apt-get update -y || error_exit "Failed to update package lists"
-    
-    # Install Python 3 and pip
-    log "Installing Python 3.x and pip..."
-    apt-get install -y python3 python3-pip python3-venv || error_exit "Failed to install Python 3.x"
+    # Check if we're in a CF environment (no root privileges)
+    if [ "$EUID" -eq 0 ] && command -v apt-get >/dev/null 2>&1; then
+        # We have root privileges and apt-get, proceed with installation
+        log "Updating package lists..."
+        apt-get update -y || error_exit "Failed to update package lists"
+        
+        # Install Python 3 and pip
+        log "Installing Python 3.x and pip..."
+        apt-get install -y python3 python3-pip python3-venv || error_exit "Failed to install Python 3.x"
+    else
+        # CF environment - assume Python is already available or will be provided by CF
+        log "CF environment detected - skipping Python installation"
+        log "Assuming Python will be available at runtime"
+    fi
     
     # Verify installation
     if ! command -v python3 >/dev/null 2>&1; then
@@ -122,18 +129,25 @@ install_nodejs() {
         fi
     fi
     
-    # Update package lists
-    log "Updating package lists for Node.js installation..."
-    apt-get update -y || error_exit "Failed to update package lists for Node.js"
-    
-    # Install Node.js LTS using NodeSource repository
-    log "Installing Node.js LTS from NodeSource repository..."
-    
-    # Add NodeSource repository key
-    curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - || error_exit "Failed to add NodeSource repository"
-    
-    # Install Node.js LTS
-    apt-get install -y nodejs || error_exit "Failed to install Node.js LTS"
+    # Check if we're in a CF environment (no root privileges)
+    if [ "$EUID" -eq 0 ] && command -v apt-get >/dev/null 2>&1; then
+        # We have root privileges and apt-get, proceed with installation
+        log "Updating package lists for Node.js installation..."
+        apt-get update -y || error_exit "Failed to update package lists for Node.js"
+        
+        # Install Node.js LTS using NodeSource repository
+        log "Installing Node.js LTS from NodeSource repository..."
+        
+        # Add NodeSource repository key
+        curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - || error_exit "Failed to add NodeSource repository"
+        
+        # Install Node.js LTS
+        apt-get install -y nodejs || error_exit "Failed to install Node.js LTS"
+    else
+        # CF environment - assume Node.js is already available or will be provided by CF
+        log "CF environment detected - skipping Node.js installation"
+        log "Assuming Node.js will be available at runtime"
+    fi
     
     # Verify installation
     if ! command -v node >/dev/null 2>&1; then
