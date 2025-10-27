@@ -1,0 +1,94 @@
+#!/bin/bash
+
+# CF Skills Container Buildpack Release Script
+# This script outputs YAML configuration that tells Cloud Foundry
+# how to start the CF Skills Container application.
+
+set -e
+
+# Function to display usage information
+usage() {
+    echo "Usage: $0 <BUILD_DIR>" >&2
+    echo "  BUILD_DIR: Path to the application build directory" >&2
+    exit 1
+}
+
+# Function to log messages with a timestamp
+log() {
+    echo "[$(date +'%Y-%m-%d %H:%M:%S')] $1" >&2
+}
+
+# Function to handle errors gracefully and exit
+error_exit() {
+    local message="$1"
+    local exit_code="${2:-1}"
+    log "ERROR: $message" >&2
+    exit "$exit_code"
+}
+
+# Function to validate if a path is a directory
+validate_directory() {
+    local dir_path="$1"
+    local dir_name="$2"
+
+    if [ -z "$dir_path" ]; then
+        error_exit "$dir_name parameter is required"
+    fi
+    if [ ! -e "$dir_path" ]; then
+        error_exit "$dir_name '$dir_path' does not exist"
+    fi
+    if [ ! -d "$dir_path" ]; then
+        error_exit "$dir_name '$dir_path' is not a directory"
+    fi
+}
+
+# --- Main Script Logic ---
+
+log "Starting CF Skills Buildpack release configuration"
+
+# Get BUILD_DIR from command line argument
+BUILD_DIR="$1"
+
+# Validate parameters
+if [ -z "$BUILD_DIR" ]; then
+    usage
+fi
+
+# Validate build directory
+validate_directory "$BUILD_DIR" "Build directory"
+
+log "Build directory: $BUILD_DIR"
+
+# Verify that the application's bin/start script exists
+START_SCRIPT="$BUILD_DIR/bin/start"
+if [ ! -f "$START_SCRIPT" ]; then
+    error_exit "Application startup script not found: $START_SCRIPT"
+fi
+
+if [ ! -x "$START_SCRIPT" ]; then
+    error_exit "Application startup script is not executable: $START_SCRIPT"
+fi
+
+log "Found application startup script: $START_SCRIPT"
+
+# Verify that process_api binary exists
+PROCESS_API_BINARY="$BUILD_DIR/bin/process_api"
+if [ ! -f "$PROCESS_API_BINARY" ]; then
+    error_exit "process_api binary not found: $PROCESS_API_BINARY"
+fi
+
+if [ ! -x "$PROCESS_API_BINARY" ]; then
+    error_exit "process_api binary is not executable: $PROCESS_API_BINARY"
+fi
+
+log "Found process_api binary: $PROCESS_API_BINARY"
+
+# Output YAML configuration for Cloud Foundry
+log "Generating release configuration..."
+
+cat << EOF
+default_process_types:
+  web: bin/start
+EOF
+
+log "CF Skills Buildpack release configuration completed successfully"

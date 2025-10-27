@@ -1,0 +1,56 @@
+#!/bin/bash
+
+# CF Skills Container Buildpack Detection Script
+# This script determines if the skills-buildpack should be used for this application
+# by checking for the presence of the process_api binary in the application root
+
+set -e
+
+# Function to display usage information
+usage() {
+    echo "Usage: $0 <BUILD_DIR>" >&2
+    echo "  BUILD_DIR: Path to the application build directory" >&2
+    exit 1
+}
+
+# Function to handle errors gracefully
+error_exit() {
+    local message="$1"
+    local exit_code="${2:-1}"
+    echo "Error: $message" >&2
+    exit "$exit_code"
+}
+
+# Get the build directory from the first argument
+BUILD_DIR="$1"
+
+# Validate that BUILD_DIR is provided
+if [ -z "$BUILD_DIR" ]; then
+    usage
+fi
+
+# Check if BUILD_DIR is a valid path
+if [ ! -e "$BUILD_DIR" ]; then
+    error_exit "BUILD_DIR '$BUILD_DIR' does not exist"
+fi
+
+# Check if BUILD_DIR is a directory
+if [ ! -d "$BUILD_DIR" ]; then
+    error_exit "BUILD_DIR '$BUILD_DIR' is not a directory"
+fi
+
+# Check if we have read permissions for the directory
+if [ ! -r "$BUILD_DIR" ]; then
+    error_exit "No read permission for BUILD_DIR '$BUILD_DIR'"
+fi
+
+# Check for process_api binary in the build directory
+PROCESS_API_PATH="$BUILD_DIR/process_api"
+
+# Check if process_api binary exists and is executable
+if [ -f "$PROCESS_API_PATH" ] && [ -x "$PROCESS_API_PATH" ]; then
+    echo "CF Skills Container"
+    exit 0
+else
+    exit 1
+fi

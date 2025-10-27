@@ -1,0 +1,31 @@
+# Cloud Foundry ignore file for cf-skills-buildpack
+
+# Development files
+*.log
+*.tmp
+*.swp
+*.swo
+*~
+
+# IDE files
+.vscode/
+.idea/
+*.sublime-*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+*.md
+docs/
+
+# Task management
+.taskmaster/
+
+# Test files
+test-*

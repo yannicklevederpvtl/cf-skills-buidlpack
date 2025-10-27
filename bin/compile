@@ -1,0 +1,359 @@
+#!/bin/bash
+
+# CF Skills Buildpack Compilation Script
+# This script installs runtime dependencies and prepares the application
+# for execution in the Cloud Foundry environment
+
+set -e
+
+# Function to display usage information
+usage() {
+    echo "Usage: $0 <BUILD_DIR> <CACHE_DIR>" >&2
+    echo "  BUILD_DIR: Path to the application build directory" >&2
+    echo "  CACHE_DIR: Path to the buildpack cache directory" >&2
+    exit 1
+}
+
+# Function to handle errors gracefully
+error_exit() {
+    local message="$1"
+    local exit_code="${2:-1}"
+    echo "Error: $message" >&2
+    exit "$exit_code"
+}
+
+# Function for logging with timestamps
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
+}
+
+# Function to validate directory exists and is writable
+validate_directory() {
+    local dir_path="$1"
+    local dir_name="$2"
+    
+    if [ -z "$dir_path" ]; then
+        error_exit "$dir_name parameter is required"
+    fi
+    
+    if [ ! -e "$dir_path" ]; then
+        error_exit "$dir_name '$dir_path' does not exist"
+    fi
+    
+    if [ ! -d "$dir_path" ]; then
+        error_exit "$dir_name '$dir_path' is not a directory"
+    fi
+    
+    if [ ! -w "$dir_path" ]; then
+        error_exit "No write permission for $dir_name '$dir_path'"
+    fi
+}
+
+# Get command line arguments
+BUILD_DIR="$1"
+CACHE_DIR="$2"
+
+# Validate required parameters
+if [ -z "$BUILD_DIR" ] || [ -z "$CACHE_DIR" ]; then
+    usage
+fi
+
+# Validate directories
+validate_directory "$BUILD_DIR" "BUILD_DIR"
+validate_directory "$CACHE_DIR" "CACHE_DIR"
+
+log "Starting CF Skills Buildpack compilation"
+log "Build directory: $BUILD_DIR"
+log "Cache directory: $CACHE_DIR"
+
+# Install Python 3.x
+log "Installing Python 3.x..."
+install_python() {
+    # Check if Python 3 is already available
+    if command -v python3 >/dev/null 2>&1; then
+        local python_version=$(python3 --version 2>&1 | cut -d' ' -f2)
+        log "Python 3 already available: $python_version"
+        return 0
+    fi
+    
+    # Update package lists
+    log "Updating package lists..."
+    apt-get update -y || error_exit "Failed to update package lists"
+    
+    # Install Python 3 and pip
+    log "Installing Python 3.x and pip..."
+    apt-get install -y python3 python3-pip python3-venv || error_exit "Failed to install Python 3.x"
+    
+    # Verify installation
+    if ! command -v python3 >/dev/null 2>&1; then
+        error_exit "Python 3 installation failed - python3 command not found"
+    fi
+    
+    local python_version=$(python3 --version 2>&1 | cut -d' ' -f2)
+    log "Python 3 installed successfully: $python_version"
+    
+    # Verify pip is available
+    if ! command -v pip3 >/dev/null 2>&1; then
+        log "Warning: pip3 not found, but Python 3 is installed"
+    else
+        local pip_version=$(pip3 --version 2>&1 | cut -d' ' -f2)
+        log "pip3 available: $pip_version"
+    fi
+}
+
+# Call Python installation
+install_python
+
+# Install Node.js LTS
+log "Installing Node.js LTS..."
+install_nodejs() {
+    # Check if Node.js is already available
+    if command -v node >/dev/null 2>&1; then
+        local node_version=$(node --version 2>&1 | cut -d'v' -f2)
+        log "Node.js already available: v$node_version"
+        
+        # Check if it's an LTS version (even numbers are LTS)
+        local major_version=$(echo "$node_version" | cut -d'.' -f1)
+        if [ $((major_version % 2)) -eq 0 ]; then
+            log "Node.js LTS version detected: v$node_version"
+            return 0
+        else
+            log "Node.js version v$node_version is not LTS, will reinstall LTS version"
+        fi
+    fi
+    
+    # Update package lists
+    log "Updating package lists for Node.js installation..."
+    apt-get update -y || error_exit "Failed to update package lists for Node.js"
+    
+    # Install Node.js LTS using NodeSource repository
+    log "Installing Node.js LTS from NodeSource repository..."
+    
+    # Add NodeSource repository key
+    curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - || error_exit "Failed to add NodeSource repository"
+    
+    # Install Node.js LTS
+    apt-get install -y nodejs || error_exit "Failed to install Node.js LTS"
+    
+    # Verify installation
+    if ! command -v node >/dev/null 2>&1; then
+        error_exit "Node.js installation failed - node command not found"
+    fi
+    
+    local node_version=$(node --version 2>&1 | cut -d'v' -f2)
+    log "Node.js LTS installed successfully: v$node_version"
+    
+    # Verify npm is available
+    if ! command -v npm >/dev/null 2>&1; then
+        log "Warning: npm not found, but Node.js is installed"
+    else
+        local npm_version=$(npm --version 2>&1)
+        log "npm available: v$npm_version"
+    fi
+    
+    # Verify LTS version
+    local major_version=$(echo "$node_version" | cut -d'.' -f1)
+    if [ $((major_version % 2)) -eq 0 ]; then
+        log "Confirmed LTS version: v$node_version"
+    else
+        log "Warning: Installed Node.js v$node_version may not be LTS"
+    fi
+}
+
+# Call Node.js installation
+install_nodejs
+
+# Copy and configure process_api binary
+log "Configuring process_api binary..."
+configure_process_api() {
+    local process_api_source="$BUILD_DIR/process_api"
+    local process_api_dest="$BUILD_DIR/bin/process_api"
+    
+    # Check if process_api binary exists in the application
+    if [ ! -f "$process_api_source" ]; then
+        error_exit "process_api binary not found in application directory: $process_api_source"
+    fi
+    
+    log "Found process_api binary: $process_api_source"
+    
+    # Create bin directory if it doesn't exist
+    local bin_dir="$BUILD_DIR/bin"
+    if [ ! -d "$bin_dir" ]; then
+        log "Creating bin directory: $bin_dir"
+        mkdir -p "$bin_dir" || error_exit "Failed to create bin directory: $bin_dir"
+    fi
+    
+    # Copy process_api binary to bin directory
+    log "Copying process_api binary to: $process_api_dest"
+    cp "$process_api_source" "$process_api_dest" || error_exit "Failed to copy process_api binary"
+    
+    # Set executable permissions
+    log "Setting executable permissions on process_api binary"
+    chmod +x "$process_api_dest" || error_exit "Failed to set executable permissions on process_api binary"
+    
+    # Verify the binary is executable
+    if [ ! -x "$process_api_dest" ]; then
+        error_exit "process_api binary is not executable after permission setting"
+    fi
+    
+    # Test binary execution (try --help or --version)
+    log "Testing process_api binary execution..."
+    if "$process_api_dest" --help >/dev/null 2>&1; then
+        log "process_api binary --help test successful"
+    elif "$process_api_dest" --version >/dev/null 2>&1; then
+        log "process_api binary --version test successful"
+    else
+        log "Warning: process_api binary execution test failed, but binary exists and is executable"
+    fi
+    
+    # Get binary information
+    local file_info=$(file "$process_api_dest" 2>/dev/null || echo "Unknown")
+    log "process_api binary info: $file_info"
+    
+    # Get binary size
+    local binary_size=$(wc -c < "$process_api_dest" 2>/dev/null || echo "Unknown")
+    log "process_api binary size: $binary_size bytes"
+    
+    log "process_api binary configured successfully at: $process_api_dest"
+}
+
+# Call process_api configuration
+configure_process_api
+
+# Create profile.d/setup.sh runtime environment script
+log "Creating profile.d/setup.sh runtime environment script..."
+create_profile_setup() {
+    local profile_dir="$BUILD_DIR/profile.d"
+    local setup_script="$profile_dir/setup.sh"
+    
+    # Create profile.d directory
+    log "Creating profile.d directory: $profile_dir"
+    mkdir -p "$profile_dir" || error_exit "Failed to create profile.d directory: $profile_dir"
+    
+    # Create setup.sh script
+    log "Creating setup.sh script: $setup_script"
+    cat > "$setup_script" << 'EOF'
+#!/bin/bash
+
+# CF Skills Container Runtime Environment Setup Script
+# This script is automatically sourced by Cloud Foundry at application startup
+# to configure the runtime environment for the skills container.
+
+set -e
+
+# Logging function for runtime environment setup
+log_runtime() {
+    echo "[$(date +'%Y-%m-%d %H:%M:%S')] RUNTIME: $1"
+}
+
+log_runtime "Setting up CF Skills Container runtime environment..."
+
+# --- PATH Configuration ---
+log_runtime "Configuring PATH environment variable..."
+
+# Add Python 3.x to PATH if available
+if command -v python3 >/dev/null 2>&1; then
+    PYTHON_PATH=$(dirname "$(command -v python3)")
+    if [[ ":$PATH:" != *":$PYTHON_PATH:"* ]]; then
+        export PATH="$PYTHON_PATH:$PATH"
+        log_runtime "Added Python 3.x to PATH: $PYTHON_PATH"
+    fi
+else
+    log_runtime "Warning: python3 not found in PATH"
+fi
+
+# Add Node.js to PATH if available
+if command -v node >/dev/null 2>&1; then
+    NODE_PATH=$(dirname "$(command -v node)")
+    if [[ ":$PATH:" != *":$NODE_PATH:"* ]]; then
+        export PATH="$NODE_PATH:$PATH"
+        log_runtime "Added Node.js to PATH: $NODE_PATH"
+    fi
+else
+    log_runtime "Warning: node not found in PATH"
+fi
+
+# Add process_api binary to PATH
+PROCESS_API_BIN="$HOME/bin"
+if [[ ":$PATH:" != *":$PROCESS_API_BIN:"* ]]; then
+    export PATH="$PROCESS_API_BIN:$PATH"
+    log_runtime "Added process_api binary directory to PATH: $PROCESS_API_BIN"
+fi
+
+# --- Environment Variables ---
+log_runtime "Setting up environment variables..."
+
+# Set NODE_PATH for Node.js module resolution
+if command -v node >/dev/null 2>&1; then
+    export NODE_PATH="/usr/local/lib/node_modules:/usr/lib/node_modules"
+    log_runtime "Set NODE_PATH: $NODE_PATH"
+fi
+
+# Set PYTHONPATH for Python module resolution
+if command -v python3 >/dev/null 2>&1; then
+    export PYTHONPATH="/usr/local/lib/python3/dist-packages:/usr/lib/python3/dist-packages"
+    log_runtime "Set PYTHONPATH: $PYTHONPATH"
+fi
+
+# CF-specific environment variables
+if [ -n "${PORT:-}" ]; then
+    log_runtime "CF PORT: $PORT"
+fi
+
+if [ -n "${MEMORY_LIMIT:-}" ]; then
+    log_runtime "CF MEMORY_LIMIT: $MEMORY_LIMIT"
+fi
+
+# --- Runtime Dependency Verification ---
+log_runtime "Verifying runtime dependencies..."
+
+# Check Python 3.x
+if command -v python3 >/dev/null 2>&1; then
+    PYTHON_VERSION=$(python3 --version 2>&1 | cut -d' ' -f2)
+    log_runtime "✓ Python 3.x available: $PYTHON_VERSION"
+else
+    log_runtime "✗ Python 3.x not available"
+fi
+
+# Check Node.js
+if command -v node >/dev/null 2>&1; then
+    NODE_VERSION=$(node --version 2>&1 | cut -d'v' -f2)
+    log_runtime "✓ Node.js available: v$NODE_VERSION"
+else
+    log_runtime "✗ Node.js not available"
+fi
+
+# Check npm
+if command -v npm >/dev/null 2>&1; then
+    NPM_VERSION=$(npm --version 2>&1)
+    log_runtime "✓ npm available: v$NPM_VERSION"
+else
+    log_runtime "✗ npm not available"
+fi
+
+# Check process_api binary
+if command -v process_api >/dev/null 2>&1; then
+    log_runtime "✓ process_api binary available"
+else
+    log_runtime "✗ process_api binary not available in PATH"
+fi
+
+log_runtime "CF Skills Container runtime environment setup completed"
+EOF
+
+    # Make setup.sh executable
+    chmod +x "$setup_script" || error_exit "Failed to make setup.sh executable"
+    
+    # Verify the script was created correctly
+    if [ ! -f "$setup_script" ] || [ ! -x "$setup_script" ]; then
+        error_exit "Failed to create or make setup.sh executable"
+    fi
+    
+    log "Created profile.d/setup.sh script: $setup_script"
+    log "Script size: $(wc -c < "$setup_script") bytes"
+}
+
+# Call profile.d/setup.sh creation
+create_profile_setup
+
+log "CF Skills Buildpack compilation completed successfully"
