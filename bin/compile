@@ -376,43 +376,34 @@ fi
 # --- Runtime Symlinks Creation ---
 log_runtime "Creating runtime symlinks for standard command paths..."
 
-# Ensure bin directory exists
-mkdir -p "$HOME/bin" 2>/dev/null || true
+# Hardcoded CF paths (these are standard and won't change)
+APP_BIN_DIR="/home/vcap/app/bin"
+PYTHON_SYSTEM="/usr/bin/python3"
+NODE_DEPS="/home/vcap/deps/0/bin/node"
+NPM_DEPS="/home/vcap/deps/0/bin/npm"
 
-# Create Python 3 symlink
-if command -v python3 >/dev/null 2>&1; then
-    PYTHON_REAL_PATH=$(command -v python3)
-    ln -sf "$PYTHON_REAL_PATH" "$HOME/bin/python3" 2>/dev/null || true
-    log_runtime "✓ Python 3 symlink: $HOME/bin/python3 -> $PYTHON_REAL_PATH"
+# Create Python 3 symlink (system Python in CF)
+if [ -f "\$PYTHON_SYSTEM" ]; then
+    ln -sf "\$PYTHON_SYSTEM" "\$APP_BIN_DIR/python3" 2>/dev/null || true
+    log_runtime "✓ Python 3 symlink: \$APP_BIN_DIR/python3 -> \$PYTHON_SYSTEM"
+else
+    log_runtime "⚠ Python 3 not found at \$PYTHON_SYSTEM"
 fi
 
-# Create pip3 symlink
-if command -v pip3 >/dev/null 2>&1; then
-    PIP_REAL_PATH=$(command -v pip3)
-    ln -sf "$PIP_REAL_PATH" "$HOME/bin/pip3" 2>/dev/null || true
-    log_runtime "✓ pip3 symlink: $HOME/bin/pip3 -> $PIP_REAL_PATH"
+# Create Node.js symlink (from nodejs_buildpack deps)
+if [ -f "\$NODE_DEPS" ]; then
+    ln -sf "\$NODE_DEPS" "\$APP_BIN_DIR/node" 2>/dev/null || true
+    log_runtime "✓ Node.js symlink: \$APP_BIN_DIR/node -> \$NODE_DEPS"
+else
+    log_runtime "⚠ Node.js not found at \$NODE_DEPS"
 fi
 
-# Create Node.js symlink (check deps directory first, then PATH)
-NODE_DEPS_PATH="/home/vcap/deps/0/bin/node"
-if [ -f "$NODE_DEPS_PATH" ]; then
-    ln -sf "$NODE_DEPS_PATH" "$HOME/bin/node" 2>/dev/null || true
-    log_runtime "✓ Node.js symlink: $HOME/bin/node -> $NODE_DEPS_PATH"
-elif command -v node >/dev/null 2>&1; then
-    NODE_REAL_PATH=$(command -v node)
-    ln -sf "$NODE_REAL_PATH" "$HOME/bin/node" 2>/dev/null || true
-    log_runtime "✓ Node.js symlink: $HOME/bin/node -> $NODE_REAL_PATH"
-fi
-
-# Create npm symlink (check deps directory first, then PATH)
-NPM_DEPS_PATH="/home/vcap/deps/0/bin/npm"
-if [ -f "$NPM_DEPS_PATH" ]; then
-    ln -sf "$NPM_DEPS_PATH" "$HOME/bin/npm" 2>/dev/null || true
-    log_runtime "✓ npm symlink: $HOME/bin/npm -> $NPM_DEPS_PATH"
-elif command -v npm >/dev/null 2>&1; then
-    NPM_REAL_PATH=$(command -v npm)
-    ln -sf "$NPM_REAL_PATH" "$HOME/bin/npm" 2>/dev/null || true
-    log_runtime "✓ npm symlink: $HOME/bin/npm -> $NPM_REAL_PATH"
+# Create npm symlink (from nodejs_buildpack deps)
+if [ -f "\$NPM_DEPS" ]; then
+    ln -sf "\$NPM_DEPS" "\$APP_BIN_DIR/npm" 2>/dev/null || true
+    log_runtime "✓ npm symlink: \$APP_BIN_DIR/npm -> \$NPM_DEPS"
+else
+    log_runtime "⚠ npm not found at \$NPM_DEPS"
 fi
 
 log_runtime "Runtime symlinks creation completed"
