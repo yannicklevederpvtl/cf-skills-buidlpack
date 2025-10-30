@@ -250,69 +250,10 @@ configure_process_api() {
 # Call process_api configuration
 configure_process_api
 
-# Create symlinks for standard runtime paths
-log "Creating symlinks for standard runtime command paths..."
-create_runtime_symlinks() {
-    local bin_dir="$BUILD_DIR/bin"
-    
-    # Ensure bin directory exists
-    mkdir -p "$bin_dir" || error_exit "Failed to create bin directory for symlinks"
-    
-    # Create symlink for Python 3
-    if command -v python3 >/dev/null 2>&1; then
-        local python_path=$(command -v python3)
-        local python_link="$bin_dir/python3"
-        
-        log "Creating Python 3 symlink: $python_link -> $python_path"
-        ln -sf "$python_path" "$python_link" || log "Warning: Failed to create Python 3 symlink"
-        
-        # Verify symlink
-        if [ -L "$python_link" ]; then
-            log "Python 3 symlink created successfully"
-        fi
-    else
-        log "Warning: python3 not found, skipping symlink creation"
-    fi
-    
-    # Create symlink for pip3
-    if command -v pip3 >/dev/null 2>&1; then
-        local pip_path=$(command -v pip3)
-        local pip_link="$bin_dir/pip3"
-        
-        log "Creating pip3 symlink: $pip_link -> $pip_path"
-        ln -sf "$pip_path" "$pip_link" || log "Warning: Failed to create pip3 symlink"
-    fi
-    
-    # Create symlink for Node.js
-    if command -v node >/dev/null 2>&1; then
-        local node_path=$(command -v node)
-        local node_link="$bin_dir/node"
-        
-        log "Creating Node.js symlink: $node_link -> $node_path"
-        ln -sf "$node_path" "$node_link" || log "Warning: Failed to create Node.js symlink"
-        
-        # Verify symlink
-        if [ -L "$node_link" ]; then
-            log "Node.js symlink created successfully"
-        fi
-    else
-        log "Warning: node not found, skipping symlink creation"
-    fi
-    
-    # Create symlink for npm
-    if command -v npm >/dev/null 2>&1; then
-        local npm_path=$(command -v npm)
-        local npm_link="$bin_dir/npm"
-        
-        log "Creating npm symlink: $npm_link -> $npm_path"
-        ln -sf "$npm_path" "$npm_link" || log "Warning: Failed to create npm symlink"
-    fi
-    
-    log "Runtime symlinks creation completed"
-}
-
-# Call symlink creation
-create_runtime_symlinks
+# Ensure bin directory exists for runtime symlinks
+log "Creating bin directory for runtime symlinks..."
+mkdir -p "$BUILD_DIR/bin" || error_exit "Failed to create bin directory"
+log "bin directory created at: $BUILD_DIR/bin"
 
 # Create profile.d/setup.sh runtime environment script
 log "Creating profile.d/setup.sh runtime environment script..."
@@ -431,6 +372,42 @@ if command -v process_api >/dev/null 2>&1; then
 else
     log_runtime "✗ process_api binary not available in PATH"
 fi
+
+# --- Runtime Symlinks Creation ---
+log_runtime "Creating runtime symlinks for standard command paths..."
+
+# Ensure bin directory exists
+mkdir -p "$HOME/bin" 2>/dev/null || true
+
+# Create Python 3 symlink
+if command -v python3 >/dev/null 2>&1; then
+    PYTHON_REAL_PATH=$(command -v python3)
+    ln -sf "$PYTHON_REAL_PATH" "$HOME/bin/python3" 2>/dev/null || true
+    log_runtime "✓ Python 3 symlink: $HOME/bin/python3 -> $PYTHON_REAL_PATH"
+fi
+
+# Create pip3 symlink
+if command -v pip3 >/dev/null 2>&1; then
+    PIP_REAL_PATH=$(command -v pip3)
+    ln -sf "$PIP_REAL_PATH" "$HOME/bin/pip3" 2>/dev/null || true
+    log_runtime "✓ pip3 symlink: $HOME/bin/pip3 -> $PIP_REAL_PATH"
+fi
+
+# Create Node.js symlink
+if command -v node >/dev/null 2>&1; then
+    NODE_REAL_PATH=$(command -v node)
+    ln -sf "$NODE_REAL_PATH" "$HOME/bin/node" 2>/dev/null || true
+    log_runtime "✓ Node.js symlink: $HOME/bin/node -> $NODE_REAL_PATH"
+fi
+
+# Create npm symlink
+if command -v npm >/dev/null 2>&1; then
+    NPM_REAL_PATH=$(command -v npm)
+    ln -sf "$NPM_REAL_PATH" "$HOME/bin/npm" 2>/dev/null || true
+    log_runtime "✓ npm symlink: $HOME/bin/npm -> $NPM_REAL_PATH"
+fi
+
+log_runtime "Runtime symlinks creation completed"
 
 log_runtime "CF Skills Container runtime environment setup completed"
 EOF
