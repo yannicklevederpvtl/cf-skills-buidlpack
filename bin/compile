@@ -393,15 +393,23 @@ if command -v pip3 >/dev/null 2>&1; then
     log_runtime "✓ pip3 symlink: $HOME/bin/pip3 -> $PIP_REAL_PATH"
 fi
 
-# Create Node.js symlink
-if command -v node >/dev/null 2>&1; then
+# Create Node.js symlink (check deps directory first, then PATH)
+NODE_DEPS_PATH="/home/vcap/deps/0/bin/node"
+if [ -f "$NODE_DEPS_PATH" ]; then
+    ln -sf "$NODE_DEPS_PATH" "$HOME/bin/node" 2>/dev/null || true
+    log_runtime "✓ Node.js symlink: $HOME/bin/node -> $NODE_DEPS_PATH"
+elif command -v node >/dev/null 2>&1; then
     NODE_REAL_PATH=$(command -v node)
     ln -sf "$NODE_REAL_PATH" "$HOME/bin/node" 2>/dev/null || true
     log_runtime "✓ Node.js symlink: $HOME/bin/node -> $NODE_REAL_PATH"
 fi
 
-# Create npm symlink
-if command -v npm >/dev/null 2>&1; then
+# Create npm symlink (check deps directory first, then PATH)
+NPM_DEPS_PATH="/home/vcap/deps/0/bin/npm"
+if [ -f "$NPM_DEPS_PATH" ]; then
+    ln -sf "$NPM_DEPS_PATH" "$HOME/bin/npm" 2>/dev/null || true
+    log_runtime "✓ npm symlink: $HOME/bin/npm -> $NPM_DEPS_PATH"
+elif command -v npm >/dev/null 2>&1; then
     NPM_REAL_PATH=$(command -v npm)
     ln -sf "$NPM_REAL_PATH" "$HOME/bin/npm" 2>/dev/null || true
     log_runtime "✓ npm symlink: $HOME/bin/npm -> $NPM_REAL_PATH"
