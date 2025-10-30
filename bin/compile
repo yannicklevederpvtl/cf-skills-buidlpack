@@ -250,6 +250,70 @@ configure_process_api() {
 # Call process_api configuration
 configure_process_api
 
+# Create symlinks for standard runtime paths
+log "Creating symlinks for standard runtime command paths..."
+create_runtime_symlinks() {
+    local bin_dir="$BUILD_DIR/bin"
+    
+    # Ensure bin directory exists
+    mkdir -p "$bin_dir" || error_exit "Failed to create bin directory for symlinks"
+    
+    # Create symlink for Python 3
+    if command -v python3 >/dev/null 2>&1; then
+        local python_path=$(command -v python3)
+        local python_link="$bin_dir/python3"
+        
+        log "Creating Python 3 symlink: $python_link -> $python_path"
+        ln -sf "$python_path" "$python_link" || log "Warning: Failed to create Python 3 symlink"
+        
+        # Verify symlink
+        if [ -L "$python_link" ]; then
+            log "Python 3 symlink created successfully"
+        fi
+    else
+        log "Warning: python3 not found, skipping symlink creation"
+    fi
+    
+    # Create symlink for pip3
+    if command -v pip3 >/dev/null 2>&1; then
+        local pip_path=$(command -v pip3)
+        local pip_link="$bin_dir/pip3"
+        
+        log "Creating pip3 symlink: $pip_link -> $pip_path"
+        ln -sf "$pip_path" "$pip_link" || log "Warning: Failed to create pip3 symlink"
+    fi
+    
+    # Create symlink for Node.js
+    if command -v node >/dev/null 2>&1; then
+        local node_path=$(command -v node)
+        local node_link="$bin_dir/node"
+        
+        log "Creating Node.js symlink: $node_link -> $node_path"
+        ln -sf "$node_path" "$node_link" || log "Warning: Failed to create Node.js symlink"
+        
+        # Verify symlink
+        if [ -L "$node_link" ]; then
+            log "Node.js symlink created successfully"
+        fi
+    else
+        log "Warning: node not found, skipping symlink creation"
+    fi
+    
+    # Create symlink for npm
+    if command -v npm >/dev/null 2>&1; then
+        local npm_path=$(command -v npm)
+        local npm_link="$bin_dir/npm"
+        
+        log "Creating npm symlink: $npm_link -> $npm_path"
+        ln -sf "$npm_path" "$npm_link" || log "Warning: Failed to create npm symlink"
+    fi
+    
+    log "Runtime symlinks creation completed"
+}
+
+# Call symlink creation
+create_runtime_symlinks
+
 # Create profile.d/setup.sh runtime environment script
 log "Creating profile.d/setup.sh runtime environment script..."
 create_profile_setup() {
